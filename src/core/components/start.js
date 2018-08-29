@@ -4,6 +4,10 @@ const series = require('async/series')
 const Bitswap = require('ipfs-bitswap')
 const setImmediate = require('async/setImmediate')
 const promisify = require('promisify-es6')
+const TieredStore = require('datastore-core').TieredDatastore
+
+const IPNS = require('../ipns')
+const IpnsPubsubRouter = require('../ipns/pubsub-router')
 
 module.exports = (self) => {
   return promisify((callback) => {
@@ -34,6 +38,19 @@ module.exports = (self) => {
       },
       (cb) => self.libp2p.start(cb),
       (cb) => {
+        // Setup online routing for IPNS with a tiered routing composed by a DHT and a Pubsub router (if properly enabled)
+        // NOTE: For now, the DHT is being replaced by the local repo datastore
+        const stores = []
+        stores.push(self._repo.datastore)
+
+        // Verify if should create
+        console.log('libp2p node', self._libp2pNode)
+        const ipnsPubsubRouter = new IpnsPubsubRouter(null)
+        stores.push(ipnsPubsubRouter)
+
+        const routing = new TieredStore(stores)
+        self._ipns = new IPNS(routing, self)
+
         self._bitswap = new Bitswap(
           self._libp2pNode,
           self._repo.blocks,
